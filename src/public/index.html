@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Resilient Node.js API System</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', sans-serif; background: #0f1117; color: #e0e0e0; min-height: 100vh; padding: 30px; }
+    h1 { text-align: center; font-size: 1.8rem; margin-bottom: 6px; color: #fff; }
+    .subtitle { text-align: center; color: #888; margin-bottom: 30px; font-size: 0.9rem; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 1000px; margin: 0 auto 30px auto; }
+    .card { background: #1a1d27; border-radius: 12px; padding: 20px; border: 1px solid #2a2d3a; }
+    .card h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; color: #888; margin-bottom: 16px; }
+    .cb-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #2a2d3a; }
+    .cb-item:last-child { border-bottom: none; }
+    .cb-name { font-weight: 600; font-size: 0.95rem; }
+    .badge { padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; }
+    .CLOSED { background: #0d3320; color: #2ecc71; border: 1px solid #2ecc71; }
+    .OPEN { background: #3a0d0d; color: #e74c3c; border: 1px solid #e74c3c; }
+    .HALF_OPEN { background: #3a2d0d; color: #f39c12; border: 1px solid #f39c12; }
+    .cb-stats { display: flex; gap: 16px; margin-top: 6px; }
+    .stat { font-size: 0.78rem; color: #888; }
+    .stat span { color: #ccc; font-weight: 600; }
+    .bulkhead-item { padding: 12px 0; border-bottom: 1px solid #2a2d3a; }
+    .bulkhead-item:last-child { border-bottom: none; }
+    .bulkhead-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.9rem; }
+    .bar-bg { background: #2a2d3a; border-radius: 4px; height: 8px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 4px; background: #3498db; transition: width 0.3s ease; }
+    .bar-fill.high { background: #e74c3c; }
+    .controls { max-width: 1000px; margin: 0 auto 30px auto; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .control-card { background: #1a1d27; border-radius: 12px; padding: 20px; border: 1px solid #2a2d3a; }
+    .control-card h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; color: #888; margin-bottom: 16px; }
+    .slider-row { margin-bottom: 14px; }
+    .slider-row label { display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 6px; color: #ccc; }
+    input[type=range] { width: 100%; accent-color: #3498db; }
+    .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+    button { padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: opacity 0.2s; }
+    button:hover { opacity: 0.85; }
+    .btn-danger { background: #e74c3c; color: white; }
+    .btn-success { background: #2ecc71; color: #0f1117; }
+    .btn-warning { background: #f39c12; color: #0f1117; }
+    .log-box { max-width: 1000px; margin: 0 auto; background: #1a1d27; border-radius: 12px; padding: 20px; border: 1px solid #2a2d3a; }
+    .log-box h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; color: #888; margin-bottom: 12px; }
+    #log { height: 160px; overflow-y: auto; font-size: 0.8rem; font-family: monospace; color: #aaa; }
+    .log-entry { padding: 3px 0; border-bottom: 1px solid #1e2130; }
+    .log-success { color: #2ecc71; }
+    .log-error { color: #e74c3c; }
+    .log-info { color: #3498db; }
+    .pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #2ecc71; margin-right: 8px; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+  </style>
+</head>
+<body>
+  <h1>Resilient Node.js API System</h1>
+  <p class="subtitle"><span class="pulse"></span>Live monitoring — refreshes every 2 seconds</p>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Circuit Breakers</h2>
+      <div id="cb-list">Loading...</div>
+    </div>
+    <div class="card">
+      <h2>Bulkheads</h2>
+      <div id="bulkhead-list">Loading...</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="control-card">
+      <h2>Payment Service</h2>
+      <div class="slider-row">
+        <label>Failure Rate <span id="payment-rate-val">0%</span></label>
+        <input type="range" min="0" max="100" value="0" id="payment-rate" />
+      </div>
+      <div class="btn-row">
+        <button class="btn-danger" id="apply-payment">Apply</button>
+        <button class="btn-warning" id="bombard-btn">Bombard 20x</button>
+      </div>
+    </div>
+    <div class="control-card">
+      <h2>Inventory Service</h2>
+      <div class="slider-row">
+        <label>Failure Rate <span id="inventory-rate-val">0%</span></label>
+        <input type="range" min="0" max="100" value="0" id="inventory-rate" />
+      </div>
+      <div class="btn-row">
+        <button class="btn-danger" id="apply-inventory">Apply</button>
+        <button class="btn-success" id="reset-btn">Reset All</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="log-box">
+    <h2>Request Log</h2>
+    <div id="log"></div>
+  </div>
+
+  <script>
+    function addLog(msg, type) {
+      var log = document.getElementById('log');
+      var entry = document.createElement('div');
+      entry.className = 'log-entry log-' + (type || 'info');
+      entry.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+      log.insertBefore(entry, log.firstChild);
+      if (log.children.length > 50) log.removeChild(log.lastChild);
+    }
+
+    function fetchHealth() {
+      fetch('/health')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          renderCBs(data.metrics.circuitBreakers);
+          renderBulkheads(data.metrics.bulkheads);
+        })
+        .catch(function() { addLog('Health check failed', 'error'); });
+    }
+
+    function renderCBs(cbs) {
+      document.getElementById('cb-list').innerHTML = cbs.map(function(cb) {
+        return '<div class="cb-item"><div><div class="cb-name">' + cb.name + '</div>' +
+          '<div class="cb-stats"><div class="stat">Failures: <span>' + cb.failureCount + '</span></div>' +
+          '<div class="stat">Successes: <span>' + cb.successCount + '</span></div></div></div>' +
+          '<span class="badge ' + cb.state + '">' + cb.state + '</span></div>';
+      }).join('');
+    }
+
+    function renderBulkheads(bulkheads) {
+      document.getElementById('bulkhead-list').innerHTML = bulkheads.map(function(b) {
+        var pct = (b.active / b.maxConcurrent) * 100;
+        return '<div class="bulkhead-item"><div class="bulkhead-header"><span>' + b.name + '</span>' +
+          '<span>' + b.utilization + ' <small style="color:#888">(' + b.totalRejected + ' rejected)</small></span></div>' +
+          '<div class="bar-bg"><div class="bar-fill' + (pct > 70 ? ' high' : '') + '" style="width:' + pct + '%"></div></div></div>';
+      }).join('');
+    }
+
+    document.getElementById('payment-rate').addEventListener('input', function() {
+      document.getElementById('payment-rate-val').textContent = this.value + '%';
+    });
+
+    document.getElementById('inventory-rate').addEventListener('input', function() {
+      document.getElementById('inventory-rate-val').textContent = this.value + '%';
+    });
+
+    document.getElementById('apply-payment').addEventListener('click', function() {
+      var rate = parseFloat(document.getElementById('payment-rate').value) / 100;
+      fetch('/admin/payment/failure-rate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rate: rate })
+      }).then(function() {
+        addLog('Payment failure rate set to ' + (rate * 100) + '%', 'info');
+      });
+    });
+
+    document.getElementById('apply-inventory').addEventListener('click', function() {
+      var rate = parseFloat(document.getElementById('inventory-rate').value) / 100;
+      fetch('/admin/inventory/failure-rate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rate: rate })
+      }).then(function() {
+        addLog('Inventory failure rate set to ' + (rate * 100) + '%', 'info');
+      });
+    });
+
+    document.getElementById('reset-btn').addEventListener('click', function() {
+      fetch('/admin/reset', { method: 'POST' }).then(function() {
+        document.getElementById('payment-rate').value = 0;
+        document.getElementById('inventory-rate').value = 0;
+        document.getElementById('payment-rate-val').textContent = '0%';
+        document.getElementById('inventory-rate-val').textContent = '0%';
+        addLog('All services reset to healthy', 'success');
+      });
+    });
+
+    document.getElementById('bombard-btn').addEventListener('click', function() {
+      addLog('Sending 20 simultaneous requests...', 'info');
+      var promises = [];
+      for (var i = 0; i < 20; i++) {
+        (function(i) {
+          promises.push(
+            fetch('/api/order', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId: 'user-' + i, productId: 'prod-' + i, amount: 100 + i })
+            }).then(function(r) { return r.json(); }).then(function(d) {
+              if (d.success) addLog('Order placed: ' + d.data.orderId, 'success');
+              else addLog('Failed: ' + d.error, 'error');
+            }).catch(function() { addLog('Request error', 'error'); })
+          );
+        })(i);
+      }
+    });
+
+    fetchHealth();
+    setInterval(fetchHealth, 500);
+  </script>
+</body>
+</html>
