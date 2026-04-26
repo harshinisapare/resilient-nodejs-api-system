@@ -20,17 +20,22 @@ The system includes a real-time dashboard where you can:
 
 ## Architecture
 Client Request
-│
-▼
+      │
+      ▼
 API Gateway (Express)
-│
-┌────┴────┐
-▼         ▼
-Payment   Inventory
-Service   Service
-│
-Each service is protected by:
-Bulkhead → Retry Manager → Circuit Breaker → Mock Service
+      │
+      ├───────────────┬───────────────┐
+      ▼               ▼
+Payment Service   Inventory Service
+      │               │
+      ▼               ▼
+Resilience Layer (per service):
+  • Bulkhead (concurrency isolation)
+  • Retry Manager (with backoff + jitter)
+  • Circuit Breaker (failure detection)
+      │
+      ▼
+Mock External Services
 
 ## Tech Stack
 
